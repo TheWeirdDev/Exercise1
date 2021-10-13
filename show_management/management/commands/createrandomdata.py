@@ -5,6 +5,8 @@ from show_management.models import Activity, User, Candidate, Mentor, Score, Tea
 from faker import Faker
 import random
 import tqdm
+import json
+
 
 class Command(BaseCommand):
     NUM_USERS = 50
@@ -12,6 +14,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         print("Creating random data, this may take a while...")
         users = []
+        credentials = []
         f = Faker()
         a = tqdm.tqdm(desc="Creating users")
         a.total = self.NUM_USERS
@@ -19,12 +22,13 @@ class Command(BaseCommand):
         for i in range(Command.NUM_USERS):
             is_uniqe = False
             while not is_uniqe:
-                username = f.name().lower().replace(' ', '')
+                username = f.name().lower().replace(' ', '').replace('.', '')
                 if not User.objects.filter(username=username).exists():
                     is_uniqe = True
+                    password = f.password()
                     new_user = User.objects.create_user(username=username,
                                                         email=f.email(),
-                                                        password=f.password())
+                                                        password=password)
                     new_user.role = random.choices(
                         User.ROLE_CHOICES, [0.6, 0.2, 0.2])[0][0]
                     new_user.save()
@@ -36,6 +40,9 @@ class Command(BaseCommand):
                     elif new_user.role == User.CANDIDATE:
                         a.total = a.total + 3
                     users.append(new_user)
+                    credentials.append(
+                        {'username': username, 'password': password,
+                        'role': User.ROLE_CHOICES[new_user.role][1]})
                     a.update(1)
 
         a.set_description("Creating teams")
@@ -78,3 +85,6 @@ class Command(BaseCommand):
                 activity=activity).aggregate(Avg('score'))['score__avg']
             activity.save()
             a.update(1)
+
+        with open("credentials.json", 'w') as f:
+            json.dump(credentials, f)
